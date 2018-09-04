@@ -8,7 +8,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Testing", "Testing\Testing.
 		{06846DAD-F038-43FE-BC1A-EA452AA548FD} = {06846DAD-F038-43FE-BC1A-EA452AA548FD}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CustonControls", "CustonControls\CustonControls.vcxproj", "{06846DAD-F038-43FE-BC1A-EA452AA548FD}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CustomControls", "CustomControls\CustomControls.vcxproj", "{06846DAD-F038-43FE-BC1A-EA452AA548FD}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

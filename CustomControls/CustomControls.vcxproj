@@ -22,7 +22,7 @@
     <VCProjectVersion>15.0</VCProjectVersion>
     <ProjectGuid>{06846DAD-F038-43FE-BC1A-EA452AA548FD}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>CustonControls</RootNamespace>
+    <RootNamespace>CustomControls</RootNamespace>
     <WindowsTargetPlatformVersion>10.0.17134.0</WindowsTargetPlatformVersion>
     <ProjectName>CustomControls</ProjectName>
   </PropertyGroup>
