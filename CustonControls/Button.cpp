@@ -164,22 +164,7 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 				SelectObject(hdcMem, hbmOld);
 				DeleteDC(hdcMem);
 			}
-			/*
-			else
-			{
-				UINT nSizeBmb = 32;
-				RECT rcImage;
-				UINT nOffset = (RECTWIDTH(rcClient) - nSizeBmb) / 2 + 1;
-				SetRect(&rcImage,
-					rcClient.left + nOffset,
-					pCtlData->nSplitWidth - nSizeBmb - 1,
-					rcClient.left + nOffset + nSizeBmb,
-					pCtlData->nSplitWidth - 1
-				);
-				SetDCBrushColor(hdc, RGB(127, 0, 127));
-				FillRect(hdc, &rcImage, (HBRUSH)GetStockObject(DC_BRUSH));
-			}*/
-
+			
 			// Рисуем текст
 			const UINT nTopOffset = 1;
 			TCHAR szText[TEXT_MAX_COUNT + 1]; // Текст
@@ -230,16 +215,23 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 	case WM_ERASEBKGND:
 	{
 		HDC		hdc = (HDC)wParam;
-
 		HBRUSH hDCBrush = (HBRUSH)GetStockObject(DC_BRUSH);
 
-		COLORREF crCurrent = crNormal;
+		// Запрашиваем цвет фона у радителя
+		NMHDR nmhdr;
+		nmhdr.hwndFrom = hWnd;
+		nmhdr.idFrom = GetWindowLong(hWnd, GWL_ID);
+		nmhdr.code = BEN_BGCOLOR;
+		COLORREF crParrent = (COLORREF)SNDMSG(GetParent(hWnd), WM_NOTIFY,
+			(WPARAM)nmhdr.idFrom, (LPARAM)&nmhdr);
+
+		// Определяемся с цветом
+		COLORREF crCurrent = (!crParrent) ? crNormal : crParrent;
 
 		if (pCtlData->dwFlags & BF_PRESSED)
 			crCurrent = crPressed;
 		else if (pCtlData->dwFlags & BF_HIGHLIGHT)
 			crCurrent = crHighlighted;
-
 
 		RECT rc;
 		CopyRect(&rc, &rcClient);
@@ -255,7 +247,7 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 			// Нормальная
 			RECT rcNorm;
 			SubtractRect(&rcNorm, &rcClient, &rc);
-			SetDCBrushColor(hdc, crNormal);
+			SetDCBrushColor(hdc, (!crParrent) ? crNormal : crParrent);
 			FillRect(hdc, &rcNorm, hDCBrush);
 
 			// Рамка
@@ -299,9 +291,6 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 		}
 
 	*/
-
-	// debug
-		debug(hWnd);
 
 		return TRUE;
 	}
@@ -464,17 +453,15 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 		HIMAGELIST hImgList = (HIMAGELIST)lParam;
 		if (!hImgList)
 			return FALSE;
+
+		HIMAGELIST hOldImgList = pCtlData->hImageList;
 		pCtlData->hImageList = hImgList;
-		return TRUE;
+		return (LRESULT)hOldImgList;
 	}
 
 	case BEM_GETIMAGELIST:
 	{
-		HIMAGELIST *phImgList = (HIMAGELIST *)lParam;
-		if (!phImgList)
-			return FALSE;
-		*phImgList = pCtlData->hImageList;
-		return TRUE;
+		return (LRESULT)pCtlData->hImageList;
 	}
 
 	case BEM_SETIMAGE:
@@ -544,14 +531,6 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 		return TRUE;
 	}
-
-	/*
-	case BEM_GETIMAGE:
-	{
-
-		return FALSE;
-	}
-	*/
 
 	default:
 		return DefWindowProc(hWnd, uMsg, wParam, lParam);
