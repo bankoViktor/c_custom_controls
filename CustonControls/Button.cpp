@@ -542,11 +542,13 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 		return TRUE;
 	}
 
+	/*
 	case BEM_GETIMAGE:
 	{
 
 		return FALSE;
 	}
+	*/
 
 	default:
 		return DefWindowProc(hWnd, uMsg, wParam, lParam);
