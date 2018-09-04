@@ -35,9 +35,6 @@
     <ClCompile Include="stdafx.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="main.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
     <ClCompile Include="Button.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>

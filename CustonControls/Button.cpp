@@ -1,3 +1,5 @@
+
+#include "stdafx.h"
 #include "Button.h"
 
 #define STRSAFE_NO_CB_FUNCTIONS
@@ -6,6 +8,8 @@
 #pragma comment(lib, "Msimg32.lib") // для AlphaBlend
 
 LRESULT CALLBACK Button_WndProc(HWND, UINT, WPARAM, LPARAM);
+
+#define TEXT_MAX_COUNT				50
 
 // Константы цветов
 const COLORREF crParrentBk = RGB(243, 243, 243);
@@ -32,7 +36,6 @@ void debug(HWND hWnd)
 	//SetWindowText(GetParent(hWnd), szText);
 }
 
-#define TEXT_MAX_COUNT				50
 
 void PreMultipliedAlpha(BITMAP * pbm, LPVOID pvBitsDest)
 {
@@ -42,9 +45,9 @@ void PreMultipliedAlpha(BITMAP * pbm, LPVOID pvBitsDest)
 			DWORD nIndex = x + y * pbm->bmWidth;
 			DWORD crCurrent = ((DWORD*)pbm->bmBits)[nIndex];
 
-			DWORD uR = (byte)(GetRValue(crCurrent) * GetAValue(crCurrent) >> 8);
-			DWORD uG = (byte)(GetGValue(crCurrent) * GetAValue(crCurrent) >> 8);
-			DWORD uB = (byte)(GetBValue(crCurrent) * GetAValue(crCurrent) >> 8);
+			DWORD uR = (BYTE)(GetRValue(crCurrent) * GetAValue(crCurrent) >> 8);
+			DWORD uG = (BYTE)(GetGValue(crCurrent) * GetAValue(crCurrent) >> 8);
+			DWORD uB = (BYTE)(GetBValue(crCurrent) * GetAValue(crCurrent) >> 8);
 			DWORD uA = GetAValue(crCurrent);
 			((DWORD*)pvBitsDest)[nIndex] = (uA << 24) | RGB(uR, uG, uB);
 		}
@@ -89,7 +92,7 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 		ZeroMemory(pCtlData, sizeof(*pCtlData));
 		pCtlData->dwFlags = 0;
 		pCtlData->nImageIndex = -1;
-		pCtlData->nSplitY = INT((FLOAT)rcClient.top + (FLOAT)RECTHEIGHT(rcClient) *  0.53f + 0.5f);
+		pCtlData->nSplitWidth = INT((FLOAT)rcClient.top + (FLOAT)RECTHEIGHT(rcClient) *  0.53f + 0.5f);
 
 		// Меняем стандартный шрифт компонента
 		HDC hdc = GetDC(hWnd);
@@ -146,7 +149,7 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 					LONG nOffset = (RECTWIDTH(rcClient) - bm.bmWidth) / 2 + 1;
 					POINT ptImage = {
 						nOffset,
-						(LONG)pCtlData->nSplitY - bm.bmWidth - 2
+						(LONG)pCtlData->nSplitWidth - bm.bmWidth - 2
 					};
 
 					BLENDFUNCTION bf;
@@ -169,9 +172,9 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 				UINT nOffset = (RECTWIDTH(rcClient) - nSizeBmb) / 2 + 1;
 				SetRect(&rcImage,
 					rcClient.left + nOffset,
-					pCtlData->nSplitY - nSizeBmb - 1,
+					pCtlData->nSplitWidth - nSizeBmb - 1,
 					rcClient.left + nOffset + nSizeBmb,
-					pCtlData->nSplitY - 1
+					pCtlData->nSplitWidth - 1
 				);
 				SetDCBrushColor(hdc, RGB(127, 0, 127));
 				FillRect(hdc, &rcImage, (HBRUSH)GetStockObject(DC_BRUSH));
@@ -187,20 +190,20 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 			{
 				SetBkMode(hdc, TRANSPARENT);
 				RECT rcTextSize; // Полученный габаритный контейнер текста
-				DrawText(hdc, szText, cchText, &rcTextSize, DT_CALCRECT);
+				DrawText(hdc, szText, (INT)cchText, &rcTextSize, DT_CALCRECT);
 				RECT rcText; // Окончательный габаритный контейнер текста
 				SetRect(&rcText,
 					rcClient.left,
-					pCtlData->nSplitY + nTopOffset,
+					pCtlData->nSplitWidth + nTopOffset,
 					rcClient.right,
-					pCtlData->nSplitY + nTopOffset + RECTHEIGHT(rcTextSize)
+					pCtlData->nSplitWidth + nTopOffset + RECTHEIGHT(rcTextSize)
 				);
-				DrawText(hdc, szText, cchText, &rcText, DT_CENTER | DT_VCENTER);
+				DrawText(hdc, szText, (INT)cchText, &rcText, DT_CENTER | DT_VCENTER);
 			}
 			SelectObject(hdc, hOldFont);
 
 			// Рисуем стрелку
-			if (dwStyle & BCS_WHOLEDROPDOWN)
+			if (dwStyle & BCS_DROPDOWN)
 			{
 				INT nBottomOffsetArrow = 9;
 				INT  nHorizMid = RECTWIDTH(rcClient) / 2;
@@ -241,13 +244,13 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 		RECT rc;
 		CopyRect(&rc, &rcClient);
 
-		if (dwStyle & BCS_WHOLEDROPDOWN)
+		if (dwStyle & BCS_DROPDOWN)
 		{
 			// Выделенная
 			if (pCtlData->dwFlags & BF_DROPDOWNHIGHLIGHT)
-				rc.top = pCtlData->nSplitY; // Низ
+				rc.top = pCtlData->nSplitWidth; // Низ
 			else
-				rc.bottom = pCtlData->nSplitY; // Верх
+				rc.bottom = pCtlData->nSplitWidth; // Верх
 
 			// Нормальная
 			RECT rcNorm;
@@ -267,7 +270,7 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 		FillRect(hdc, &rc, hDCBrush);
 
 		/*
-		if (dwStyle & BCS_WHOLEDROPDOWN)
+		if (dwStyle & BCS_DROPDOWN)
 		{
 			if (pCtlData->dwFlags & BF_HIGHLIGHT)
 			{
@@ -278,13 +281,13 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 			RECT rcHighlight;
 			if (pCtlData->dwFlags & BF_DROPDOWNHIGHLIGHT)
 			{
-				SetRect(&rcHighlight, rcClient.left, pCtlData->nSplitY, rcClient.right, rcClient.bottom);
-				SetRect(&rc, rcClient.left + 1, rcClient.top + 1, rcClient.right - 1, pCtlData->nSplitY);
+				SetRect(&rcHighlight, rcClient.left, pCtlData->nSplitWidth, rcClient.right, rcClient.bottom);
+				SetRect(&rc, rcClient.left + 1, rcClient.top + 1, rcClient.right - 1, pCtlData->nSplitWidth);
 			}
 			else
 			{
-				SetRect(&rcHighlight, rcClient.left, rcClient.top, rcClient.right, pCtlData->nSplitY);
-				SetRect(&rc, rcClient.left + 1, pCtlData->nSplitY, rcClient.right - 1, rcClient.bottom - 1);
+				SetRect(&rcHighlight, rcClient.left, rcClient.top, rcClient.right, pCtlData->nSplitWidth);
+				SetRect(&rc, rcClient.left + 1, pCtlData->nSplitWidth, rcClient.right - 1, rcClient.bottom - 1);
 			}
 
 			// rcClient оставщейся области
@@ -323,10 +326,10 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 		POINT ptPos = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
 
 		// Доп секция
-		if (dwStyle & BCS_WHOLEDROPDOWN)
+		if (dwStyle & BCS_DROPDOWN)
 		{
 			RECT rc;
-			SetRect(&rc, rcClient.left, pCtlData->nSplitY,
+			SetRect(&rc, rcClient.left, pCtlData->nSplitWidth,
 				rcClient.right, rcClient.bottom);
 			if (PtInRect(&rc, ptPos))
 			{
@@ -533,9 +536,9 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 		RECT rcImage;
 		SetRect(&rcImage,
 			rcClient.left + nOffset,
-			pCtlData->nSplitY - nSizeImage - 1,
+			pCtlData->nSplitWidth - nSizeImage - 1,
 			rcClient.left + nOffset + nSizeImage,
-			pCtlData->nSplitY - 1
+			pCtlData->nSplitWidth - 1
 		);
 		InvalidateRect(hWnd, &rcImage, TRUE);
 
