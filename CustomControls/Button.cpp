@@ -121,11 +121,8 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 	case WM_DESTROY:
 	{
-		BUTTONCTRL * pWndData = (BUTTONCTRL *)GetWindowLongPtr(hWnd, NULL);
-
 		DeleteObject(pCtlData->hImage);
-
-		delete pWndData;
+		delete pCtlData;
 
 		return 0;
 	}
@@ -214,7 +211,7 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 	case WM_ERASEBKGND:
 	{
-		HDC		hdc = (HDC)wParam;
+		HDC	   hdc = (HDC)wParam;
 		HBRUSH hDCBrush = (HBRUSH)GetStockObject(DC_BRUSH);
 
 		// Запрашиваем цвет фона у радителя

@@ -170,8 +170,12 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <Image Include="RES\other_32.bmp" />
+    <Image Include="RES\page_fields_32.bmp" />
+    <Image Include="RES\page_orientation_32.bmp" />
     <Image Include="RES\paste_32.bmp" />
     <Image Include="RES\small.ico" />
+    <Image Include="RES\text_align_16.bmp" />
     <Image Include="res\WinAppTemplate.ico" />
   </ItemGroup>
   <ItemGroup>

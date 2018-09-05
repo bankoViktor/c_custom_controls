@@ -46,6 +46,18 @@
     <Image Include="RES\small.ico">
       <Filter>Файлы ресурсов</Filter>
     </Image>
+    <Image Include="RES\page_orientation_32.bmp">
+      <Filter>Файлы ресурсов</Filter>
+    </Image>
+    <Image Include="RES\page_fields_32.bmp">
+      <Filter>Файлы ресурсов</Filter>
+    </Image>
+    <Image Include="RES\other_32.bmp">
+      <Filter>Файлы ресурсов</Filter>
+    </Image>
+    <Image Include="RES\text_align_16.bmp">
+      <Filter>Файлы ресурсов</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc">
