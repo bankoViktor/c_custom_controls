@@ -19,6 +19,12 @@ const COLORREF crPressed = RGB(177, 177, 177);
 const COLORREF crFocused = crHighlighted;
 const COLORREF crArrow = RGB(109, 109, 109);
 
+// Пропорции частей кнопки
+const FLOAT ftRatioImage = 0.54f;
+const FLOAT ftRatioInteractive = 1 - ftRatioImage;				// = 0.46f
+const FLOAT ftRatioText = ftRatioInteractive * 0.53f;			// = 0.24f
+const FLOAT ftRatioArrow = ftRatioInteractive - ftRatioText;	// = 0.22f
+
 UINT p = 0;
 
 void debug(HWND hWnd)
@@ -53,6 +59,38 @@ void PreMultipliedAlpha(BITMAP * pbm, LPVOID pvBitsDest)
 		}
 }
 
+
+VOID DrawArrow(HDC hdc, RECT *rcArea)
+{
+	const INT sizeArrow = 3; // От подошвы до острия или *2 слева на права
+	INT  x = rcArea->left + RECTWIDTH((*rcArea)) / 2;
+	INT  y = rcArea->top + RECTHEIGHT((*rcArea)) / 2;
+	
+	HGDIOBJ hOldBrush = SelectObject(hdc, GetStockObject(DC_BRUSH));
+	HGDIOBJ hOldPen = SelectObject(hdc, GetStockObject(DC_PEN));
+	{
+		COLORREF crOldBrush = SetDCBrushColor(hdc, crArrow);
+		COLORREF crOldPen = SetDCPenColor(hdc, crArrow);
+		POINT ptArrow[] = {
+			{ x - sizeArrow + 1, y - sizeArrow / 2 },
+			{ x + sizeArrow - 1, y - sizeArrow / 2 },
+			{ x, y + sizeArrow / 2 }
+		};
+		Polygon(hdc, ptArrow, sizeof(ptArrow) / sizeof(ptArrow[0]));
+		SetDCPenColor(hdc, crOldPen);
+		SetDCBrushColor(hdc, crOldBrush);
+	}
+	SelectObject(hdc, hOldPen);
+	SelectObject(hdc, hOldBrush);
+}
+
+VOID RibbonCtl_DrawText(HWND hWnd, HDC hdc, RECT *rcArea)
+{
+	BUTTONCTRL * pCtlData = (BUTTONCTRL *)GetWindowLongPtr(hWnd, NULL);
+	
+}
+
+
 ATOM Button_RegisterClass()
 {
 	WNDCLASSEX wcex;
@@ -72,11 +110,12 @@ ATOM Button_RegisterClass()
 	return RegisterClassEx(&wcex);
 }
 
+
 LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	RECT rcClient; // клиенская область компонента
 	GetClientRect(hWnd, &rcClient);
-
+	
 	BUTTONCTRL * pCtlData = (BUTTONCTRL *)GetWindowLongPtr(hWnd, NULL);
 	DWORD dwStyle = (DWORD)GetWindowLong(hWnd, GWL_STYLE);
 
@@ -92,7 +131,7 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 		ZeroMemory(pCtlData, sizeof(*pCtlData));
 		pCtlData->dwFlags = 0;
 		pCtlData->nImageIndex = -1;
-		pCtlData->nSplitWidth = INT((FLOAT)rcClient.top + (FLOAT)RECTHEIGHT(rcClient) *  0.53f + 0.5f);
+		
 
 		// Меняем стандартный шрифт компонента
 		HDC hdc = GetDC(hWnd);
@@ -129,11 +168,99 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 	case WM_PAINT:
 	{
-		p++;
-
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hWnd, &ps);
 		{
+			// Задаем размер контейнера стрелки
+			//pCtlData->nArrowWidth = 4 + 3 + 4;
+			pCtlData->nArrowWidth = INT(RECTHEIGHT(rcClient) * ftRatioArrow + 0.5f);
+
+			// Рисуем стрелку
+			if (dwStyle & BCS_ARROW)
+			{
+				RECT rcArrow;
+				if (dwStyle & BCS_SPLITRIGHT)
+				{	
+					// cправа
+					SetRect(&rcArrow, rcClient.right - pCtlData->nArrowWidth,
+						rcClient.top, rcClient.right, rcClient.bottom);
+				} 
+				else	
+				{
+					// снизу
+					SetRect(&rcArrow, rcClient.left, rcClient.bottom - pCtlData->nArrowWidth,
+						rcClient.right, rcClient.bottom);
+				}
+				DrawArrow(hdc, &rcArrow);
+			}
+
+			// Узнаем Размер изображения
+			SIZE sizeImage = { 0 };
+			if (pCtlData->hImage)
+			{
+				BITMAP bm;
+				GetObject(pCtlData->hImage, sizeof(bm), &bm);
+				sizeImage.cx = bm.bmWidth;
+				sizeImage.cy = bm.bmHeight;
+			}
+			else if (pCtlData->nImageIndex > -1 && pCtlData->hImageList)
+			{
+				ImageList_GetIconSize(pCtlData->hImageList, (INT*)&sizeImage.cx, (INT*)&sizeImage.cy);
+			}
+			
+			// Узнаем Размер текста
+			SIZE  sizeWnd = { RECTWIDTH(rcClient), RECTHEIGHT(rcClient) }; // Размер окна
+			INT   cchText = GetWindowTextLength(hWnd);	// Длина строки контрола
+			TCHAR szBuffer[TEXT_MAX_COUNT + 1] = { 0 };	// Буффер с текстом 
+			SIZE  sizeText = { 0 };						// Размер текстовой строки
+			if (cchText)
+			{
+				GetWindowText(hWnd, szBuffer, TEXT_MAX_COUNT);
+				GetTextExtentPoint32(hdc, szBuffer, cchText, &sizeText);
+			}
+			
+			// Будет ли отрисовываться текст
+			BOOL fText =
+				cchText > 0 &&
+				INT(RECTHEIGHT(rcClient) * ftRatioImage + 0.5f) - sizeImage.cy - 1 * 2 >= 0; // Отступ (1) * два раза
+
+			// Расчитываем позицию изображения
+			POINT ptImage = { 0 };
+			if (dwStyle & BCS_SPLITRIGHT)
+			{
+				// Права
+				ptImage.y = rcClient.top + (RECTHEIGHT(rcClient) - sizeImage.cy) / 2;
+				if (fText)
+				{
+					// Текст влазиет
+					ptImage.x = ptImage.y;
+				}
+				else
+				{
+					// Текст не влазиет
+					ptImage.x = ptImage.y;
+				}
+			}
+			else
+			{
+				// Низ
+				ptImage.x = (RECTWIDTH(rcClient) - sizeImage.cx) / 2;
+				if (fText)
+					ptImage.y = (INT(RECTHEIGHT(rcClient) * ftRatioImage + 0.5f) - sizeImage.cy) / 2 + 1; // Текст влазиет
+				else
+					ptImage.y = (INT(RECTHEIGHT(rcClient) * (ftRatioImage + ftRatioText) + 0.5f) - sizeImage.cy) / 2; // Текст не влазиет
+			}
+
+			// Если иконка больше расчитанного под нее места
+			const INT nCriticalOffset = 1;
+			if (RECTWIDTH(rcClient) - 2 <= sizeImage.cx + nCriticalOffset * 2 ||
+				INT(RECTHEIGHT(rcClient) * (ftRatioImage + ftRatioText) + 0.5f) - 2 <= sizeImage.cy + nCriticalOffset * 2 &&
+				!fText) 
+			{
+				MessageBox(hWnd, TEXT("Иконка 32 px слишком большая, нужно рисовать иконку в 16 px"),
+					TEXT("Caption"), 0);
+			}
+			
 			// Рисуем изображение
 			if (pCtlData->hImage)
 			{
@@ -143,12 +270,6 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 					BITMAP bm;
 					GetObject(pCtlData->hImage, sizeof(bm), &bm);
 
-					LONG nOffset = (RECTWIDTH(rcClient) - bm.bmWidth) / 2 + 1;
-					POINT ptImage = {
-						nOffset,
-						(LONG)pCtlData->nSplitWidth - bm.bmWidth - 2
-					};
-
 					BLENDFUNCTION bf;
 					bf.BlendOp = AC_SRC_OVER;
 					bf.BlendFlags = 0;
@@ -156,54 +277,70 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 					bf.AlphaFormat = AC_SRC_ALPHA;
 
 					AlphaBlend(hdc, ptImage.x, ptImage.y, bm.bmWidth, bm.bmWidth,
-						hdcMem, 0, 0, 32, 32, bf);
+						hdcMem, 0, 0, sizeImage.cx, sizeImage.cy, bf);
 				}
 				SelectObject(hdcMem, hbmOld);
 				DeleteDC(hdcMem);
 			}
+			else if (pCtlData->nImageIndex > -1 && pCtlData->hImageList)
+			{
+				ImageList_Draw(pCtlData->hImageList, pCtlData->nImageIndex, hdc, ptImage.x, ptImage.y, 0);
+			}
 			
 			// Рисуем текст
-			const UINT nTopOffset = 1;
-			TCHAR szText[TEXT_MAX_COUNT + 1]; // Текст
-			GetWindowText(hWnd, szText, TEXT_MAX_COUNT);
-			size_t cchText = 0; // Количество символов
-			StringCchLength(szText, TEXT_MAX_COUNT, &cchText);
-			HFONT hOldFont = (HFONT)SelectObject(hdc, pCtlData->hFont); // старый шрифт
+			if (fText)
 			{
-				SetBkMode(hdc, TRANSPARENT);
-				RECT rcTextSize; // Полученный габаритный контейнер текста
-				DrawText(hdc, szText, (INT)cchText, &rcTextSize, DT_CALCRECT);
-				RECT rcText; // Окончательный габаритный контейнер текста
-				SetRect(&rcText,
-					rcClient.left,
-					pCtlData->nSplitWidth + nTopOffset,
-					rcClient.right,
-					pCtlData->nSplitWidth + nTopOffset + RECTHEIGHT(rcTextSize)
-				);
-				DrawText(hdc, szText, (INT)cchText, &rcText, DT_CENTER | DT_VCENTER);
-			}
-			SelectObject(hdc, hOldFont);
-
-			// Рисуем стрелку
-			if (dwStyle & BCS_DROPDOWN)
-			{
-				INT nBottomOffsetArrow = 9;
-				INT  nHorizMid = RECTWIDTH(rcClient) / 2;
-				HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, GetStockObject(DC_BRUSH));
-				HPEN hOldPen = (HPEN)SelectObject(hdc, GetStockObject(DC_PEN));
+				RECT rcText;
+				if (dwStyle & BCS_SPLITRIGHT)
 				{
-					SetDCBrushColor(hdc, crArrow);
-					SetDCPenColor(hdc, crArrow);
-					POINT ptArrow[] = {
-						{ nHorizMid - 2, rcClient.bottom - nBottomOffsetArrow },
-						{ nHorizMid + 2, rcClient.bottom - nBottomOffsetArrow },
-						{ nHorizMid,     rcClient.bottom - nBottomOffsetArrow + 2 }
-					};
-					Polygon(hdc, ptArrow, sizeof(ptArrow) / sizeof(ptArrow[0]));
+					// Право
+					rcText.left = ptImage.x + sizeImage.cx + 3;
+					rcText.top = rcClient.top;
+					rcText.right = rcClient.right;
+					rcText.bottom = rcClient.bottom;
 				}
-				SelectObject(hdc, hOldPen);
-				SelectObject(hdc, hOldBrush);
+				else
+				{
+					// Низ
+					rcText.left = rcClient.left;
+					rcText.top = INT(RECTHEIGHT(rcClient) * ftRatioImage + 0.5f);
+					rcText.bottom = rcClient.bottom - pCtlData->nArrowWidth;
+					rcText.right = rcClient.right;
+					
+				}
+				HGDIOBJ hOldFont = SelectObject(hdc, pCtlData->hFont); // старый шрифт
+				{
+					SetBkMode(hdc, TRANSPARENT);
+					if (dwStyle & BCS_MULTILINE)
+					{
+						// Многострочный текст
+						MessageBox(hWnd, TEXT("Многострочный текст"),
+							TEXT("Caption"), 0);
+					}
+					else
+					{
+						DrawText(hdc, szBuffer, (INT)cchText, &rcText, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+					}
+				}
+				SelectObject(hdc, hOldFont);
 			}
+
+			// Вычисляем контейнер для интеректива
+			if (dwStyle & BCS_SPLITRIGHT)
+			{
+				// справа 
+				SetRect(&pCtlData->rcSplit, rcClient.right - pCtlData->nArrowWidth,
+					rcClient.top, rcClient.right, rcClient.bottom);
+			}
+			else
+			{
+				// снизу 
+				SetRect(&pCtlData->rcSplit, rcClient.left, rcClient.bottom - pCtlData->nArrowWidth,
+					rcClient.right, rcClient.bottom);
+				if (fText)
+					pCtlData->rcSplit.top -= INT(RECTHEIGHT(rcClient) * ftRatioText + 0.5f);
+			}
+			
 		}
 		EndPaint(hWnd, &ps);
 		return 0;
@@ -213,15 +350,16 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 	{
 		HDC	   hdc = (HDC)wParam;
 		HBRUSH hDCBrush = (HBRUSH)GetStockObject(DC_BRUSH);
+		COLORREF crOldBrush = 0;
 
-		// Запрашиваем цвет фона у радителя
+		// Запрашиваем цвет фона у родителя
 		NMHDR nmhdr;
 		nmhdr.hwndFrom = hWnd;
 		nmhdr.idFrom = GetWindowLong(hWnd, GWL_ID);
 		nmhdr.code = BEN_BGCOLOR;
 		COLORREF crParrent = (COLORREF)SNDMSG(GetParent(hWnd), WM_NOTIFY,
 			(WPARAM)nmhdr.idFrom, (LPARAM)&nmhdr);
-
+		
 		// Определяемся с цветом
 		COLORREF crCurrent = (!crParrent) ? crNormal : crParrent;
 
@@ -229,22 +367,32 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 			crCurrent = crPressed;
 		else if (pCtlData->dwFlags & BF_HIGHLIGHT)
 			crCurrent = crHighlighted;
+		
+		RECT rcFill;
+		CopyRect(&rcFill, &rcClient);
 
-		RECT rc;
-		CopyRect(&rc, &rcClient);
-
-		if (dwStyle & BCS_DROPDOWN)
+		if (dwStyle & BCS_SPLITBUTTON)
 		{
-			// Выделенная
-			if (pCtlData->dwFlags & BF_DROPDOWNHIGHLIGHT)
-				rc.top = pCtlData->nSplitWidth; // Низ
+			// Определяем выделенный прямоугольник
+			if (dwStyle & BCS_SPLITRIGHT)
+			{
+				if (pCtlData->dwFlags & BF_DROPDOWNHIGHLIGHT)
+					rcFill.left = pCtlData->rcSplit.left;		// право
+				else
+					rcFill.right = pCtlData->rcSplit.left;		// лево
+			}
 			else
-				rc.bottom = pCtlData->nSplitWidth; // Верх
-
-			// Нормальная
+			{
+				if (pCtlData->dwFlags & BF_DROPDOWNHIGHLIGHT)
+					rcFill.top = pCtlData->rcSplit.top;			// низ
+				else
+				 	rcFill.bottom = pCtlData->rcSplit.top;		// верх
+			}
+						
+			// Закрашиваем оставшийся обычный прямоугольник
 			RECT rcNorm;
-			SubtractRect(&rcNorm, &rcClient, &rc);
-			SetDCBrushColor(hdc, (!crParrent) ? crNormal : crParrent);
+			SubtractRect(&rcNorm, &rcClient, &rcFill);
+			crOldBrush = SetDCBrushColor(hdc, (!crParrent) ? crNormal : crParrent);
 			FillRect(hdc, &rcNorm, hDCBrush);
 
 			// Рамка
@@ -256,38 +404,8 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 		}
 
 		SetDCBrushColor(hdc, crCurrent);
-		FillRect(hdc, &rc, hDCBrush);
-
-		/*
-		if (dwStyle & BCS_DROPDOWN)
-		{
-			if (pCtlData->dwFlags & BF_HIGHLIGHT)
-			{
-				SetDCBrushColor(hdc, crHighlighted);
-				FrameRect(hdc, &rcClient, hDCBrush);
-			}
-
-			RECT rcHighlight;
-			if (pCtlData->dwFlags & BF_DROPDOWNHIGHLIGHT)
-			{
-				SetRect(&rcHighlight, rcClient.left, pCtlData->nSplitWidth, rcClient.right, rcClient.bottom);
-				SetRect(&rc, rcClient.left + 1, rcClient.top + 1, rcClient.right - 1, pCtlData->nSplitWidth);
-			}
-			else
-			{
-				SetRect(&rcHighlight, rcClient.left, rcClient.top, rcClient.right, pCtlData->nSplitWidth);
-				SetRect(&rc, rcClient.left + 1, pCtlData->nSplitWidth, rcClient.right - 1, rcClient.bottom - 1);
-			}
-
-			// rcClient оставщейся области
-			SetDCBrushColor(hdc, crNormal);
-			FillRect(hdc, &rc, hDCBrush);
-
-			SetDCBrushColor(hdc, crCurrent);
-			FillRect(hdc, &rcHighlight, hDCBrush);
-		}
-
-	*/
+		FillRect(hdc, &rcFill, hDCBrush); // Закрашиваем выделенный прямоугольник
+		SetDCBrushColor(hdc, crOldBrush);
 
 		return TRUE;
 	}
@@ -312,12 +430,10 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 		POINT ptPos = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
 
 		// Доп секция
-		if (dwStyle & BCS_DROPDOWN)
+		if (dwStyle & BCS_SPLITBUTTON)
 		{
-			RECT rc;
-			SetRect(&rc, rcClient.left, pCtlData->nSplitWidth,
-				rcClient.right, rcClient.bottom);
-			if (PtInRect(&rc, ptPos))
+			// Проверяем попадания мыши в прямоугольник
+			if (PtInRect(&pCtlData->rcSplit, ptPos))
 			{
 				if (!(pCtlData->dwFlags & BF_DROPDOWNHIGHLIGHT))
 				{
@@ -372,11 +488,12 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 		HWND hParent = GetParent(hWnd);
 		if (pCtlData->dwFlags & BF_DROPDOWNHIGHLIGHT)
 		{
-			NMHDR nmhdr;
-			nmhdr.hwndFrom = hWnd;
-			nmhdr.idFrom = nID;
-			nmhdr.code = BEN_DROPDOWN;
-			SNDMSG(hParent, WM_NOTIFY, (WPARAM)nID, (LPARAM)&nmhdr);
+			NMBEDROPDOWN dropdown;
+			dropdown.nmhdr.hwndFrom = hWnd;
+			dropdown.nmhdr.idFrom = nID;
+			dropdown.nmhdr.code = BEN_DROPDOWN;
+			CopyRect(&dropdown.rcButton, &rcClient);
+			SNDMSG(hParent, WM_NOTIFY, (WPARAM)nID, (LPARAM)&dropdown);
 		}
 		else
 			SNDMSG(hParent, WM_COMMAND, (WPARAM)nID, (LPARAM)hWnd);
@@ -386,7 +503,7 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 	case WM_LBUTTONUP:
 	{
-		if ((pCtlData->dwFlags & BF_PRESSED))
+		if (pCtlData->dwFlags & BF_PRESSED)
 		{
 			InvalidateRect(hWnd, 0, TRUE);
 			pCtlData->dwFlags &= ~BF_PRESSED;
@@ -422,6 +539,16 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 	{
 		HWND hWndLoseFocus = (HWND)wParam;
 
+		// Уведомляем родителя о получении фокуса
+		if (dwStyle & BCS_NOTIFY)
+		{
+			NMHDR nmhdr;
+			nmhdr.hwndFrom = hWnd;
+			nmhdr.idFrom = GetWindowLong(hWnd, GWL_ID);
+			nmhdr.code = BEN_SETFOCUS;
+			SNDMSG(GetParent(hWnd), WM_NOTIFY, (WPARAM)nmhdr.idFrom, (LPARAM)&nmhdr);
+		}
+
 		pCtlData->dwFlags |= BF_FOCUSED;
 
 		return 0;
@@ -431,6 +558,16 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 	{
 		HWND hWndGetFocus = (HWND)wParam;
 
+		// Уведомляем родителя о потере фокуса
+		if (dwStyle & BCS_NOTIFY)
+		{
+			NMHDR nmhdr;
+			nmhdr.hwndFrom = hWnd;
+			nmhdr.idFrom = GetWindowLong(hWnd, GWL_ID);
+			nmhdr.code = BEN_KILLFOCUS;
+			SNDMSG(GetParent(hWnd), WM_NOTIFY, (WPARAM)nmhdr.idFrom, (LPARAM)&nmhdr);
+		}
+			
 		pCtlData->dwFlags &= ~BF_FOCUSED;
 
 		return 0;
@@ -440,6 +577,13 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 	{
 		UINT nVirtKey = (UINT)wParam;
 
+		return 0;
+	}
+
+	case WM_SIZE:
+	{
+		// TODO удалить это сообщение (WM_SIZE)
+		InvalidateRect(hWnd, 0, TRUE);
 		return 0;
 	}
 
@@ -520,9 +664,9 @@ LRESULT CALLBACK Button_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 		RECT rcImage;
 		SetRect(&rcImage,
 			rcClient.left + nOffset,
-			pCtlData->nSplitWidth - nSizeImage - 1,
+			pCtlData->nArrowWidth - nSizeImage - 1,
 			rcClient.left + nOffset + nSizeImage,
-			pCtlData->nSplitWidth - 1
+			pCtlData->nArrowWidth - 1
 		);
 		InvalidateRect(hWnd, &rcImage, TRUE);
 
